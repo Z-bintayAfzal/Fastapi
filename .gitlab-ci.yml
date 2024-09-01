@@ -1,0 +1,71 @@
+image: docker:24.0.2
+
+services:
+  - docker:24.0.2-dind
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_HOST: tcp://docker:2376
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_VERIFY: 1
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  
+  # PostgreSQL Environment Variables
+  POSTGRES_SERVER: localhost
+  POSTGRES_PORT: 5432
+  POSTGRES_DB: app
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+
+  # Custom Environment Variables
+  DOMAIN: "localhost"
+  STACK_NAME: "full-stack-fastapi-project"
+  ENVIRONMENT: "production"
+  BACKEND_CORS_ORIGINS: "http://localhost,http://localhost:5173,https://localhost,https://localhost:5173,http://localhost.tiangolo.com"
+  SECRET_KEY: "supersecretkey"
+  FIRST_SUPERUSER: "admin@example.com"
+  FIRST_SUPERUSER_PASSWORD: "adminpassword"
+  SMTP_HOST: "smtp.example.com"
+  SMTP_USER: "user@example.com"
+  SMTP_PASSWORD: "emailpassword"
+  EMAILS_FROM_EMAIL: "noreply@example.com"
+  SENTRY_DSN: ""
+
+stages:
+  - build
+  - test
+  - deploy
+
+before_script:
+  - export DOCKER_BUILDKIT=0 # Disable BuildKit
+  - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  - docker info
+
+build:
+  stage: build
+  script:
+    - docker-compose -f docker-compose.yml build
+
+test:
+  stage: test
+  script:
+    - docker-compose -f docker-compose.yml up -d db  # Start the database service
+    - sleep 10  # Wait for the database to be ready
+    - docker-compose -f docker-compose.yml run --rm backend pip install --upgrade pip
+    - docker-compose -f docker-compose.yml run --rm backend pip install fastapi[all] pytest
+    # Uncomment the next line to run tests
+    # - docker-compose -f docker-compose.yml run --rm backend pytest
+
+deploy:
+  stage: deploy
+  except:
+    - develop
+  script:
+    - docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+  environment:
+    name: production
+    url: https://127.0.0.1:8053
+
+# Optional: Uncomment if you want to clean up after the script
+# after_script:
+#   - docker-compose down

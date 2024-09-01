@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  web:
+    container_name: fastapi_app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bash -c "./prestart.sh && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+    ports:
+      - "8053:8000"
+    environment:
+      ENV: production
+      LOG_LEVEL: info
+    networks:
+      - fastapi_network
+    depends_on:
+      - db
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  db:
+    container_name: postgres_db
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fastapi_network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "myuser"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  fastapi_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
